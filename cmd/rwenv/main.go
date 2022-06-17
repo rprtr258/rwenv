@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -19,10 +20,11 @@ const (
 var (
 	envVarLine *regexp.Regexp
 
-	envFiles []string
-	verbose  bool
-	inherit  bool
-	rootCmd  = cobra.Command{
+	envFiles     []string
+	envOverrides []string
+	verbose      bool
+	inherit      bool
+	rootCmd      = cobra.Command{
 		Use:     "rwenv",
 		Short:   "Run command with environment taken from file",
 		Args:    cobra.MinimumNArgs(1),
@@ -33,6 +35,7 @@ var (
 
 func init() {
 	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env files to take vars from")
+	rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "Additional env vars in form of VAR_NAME=VALUE")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print var reading info")
 	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
 
@@ -80,6 +83,12 @@ func makeEnvList() ([]string, error) {
 
 		}
 		copy(res, envp)
+	}
+	for _, envVar := range envOverrides {
+		if !envVarLine.MatchString(envVar) {
+			return nil, fmt.Errorf("wrong env var format: %q", envVar)
+		}
+		res = append(res, envVar)
 	}
 	return res, nil
 }
