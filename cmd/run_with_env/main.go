@@ -76,9 +76,11 @@ func run(cmd *cobra.Command, args []string) error {
 	proc.Start()
 	go func() {
 		io.Copy(stdin, os.Stdin)
+		os.Stdin.Close()
 	}()
 	go func() {
 		io.Copy(os.Stdout, stdout)
+		os.Stdout.Close()
 	}()
 	go func() {
 		io.Copy(os.Stderr, stderr)
