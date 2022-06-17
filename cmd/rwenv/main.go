@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -95,46 +95,16 @@ func makeEnvList() ([]string, error) {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	proc := exec.Command(args[0], args[1:]...)
 	envp, err := makeEnvList()
 	if err != nil {
 		return err
 	}
-	proc.Env = envp
-	stdin, err := proc.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := proc.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := proc.StderrPipe()
-	if err != nil {
-		return err
-	}
-	if err := proc.Start(); err != nil {
-		return err
-	}
-	go func() {
-		if _, err := io.Copy(stdin, os.Stdin); err != nil {
-			log.Fatal(err.Error())
-		}
-		os.Stdin.Close()
-	}()
-	go func() {
-		if _, err := io.Copy(os.Stdout, stdout); err != nil {
-			log.Fatal(err.Error())
-		}
-		os.Stdout.Close()
-	}()
-	go func() {
-		if _, err := io.Copy(os.Stderr, stderr); err != nil {
-			log.Fatal(err.Error())
-		}
-	}()
 	// TODO: fix showing usage on cmd error
-	log.Printf("Error: %v\n", proc.Wait())
+	program, err := exec.LookPath(args[0])
+	if err != nil {
+		return err
+	}
+	log.Printf("Error: %v\n", syscall.Exec(program, args, envp))
 	return nil
 }
 
