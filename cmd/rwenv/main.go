@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	setEnvLineFormat = "    set env  %q\n"
-	ignoreLineFormat = "    ignoring %q\n"
+	setEnvLineFormat  = "    set env  %q\n"
+	overrideVarFormat = "override %q\n"
 )
 
 var (
@@ -77,16 +77,17 @@ func makeEnvList() ([]string, error) {
 				if verbose {
 					log.Printf(setEnvLineFormat, line)
 				}
-			} else if verbose {
-				log.Printf(ignoreLineFormat, line)
 			}
 
 		}
-		copy(res, envp)
+		res = append(res, envp...)
 	}
 	for _, envVar := range envOverrides {
 		if !envVarLine.MatchString(envVar) {
 			return nil, fmt.Errorf("wrong env var format: %q", envVar)
+		}
+		if verbose {
+			log.Printf(overrideVarFormat, envVar)
 		}
 		res = append(res, envVar)
 	}
