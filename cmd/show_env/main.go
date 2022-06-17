@@ -40,10 +40,7 @@ func main() {
 			maxLen = len(envVar.Name)
 		}
 	}
-	pad := ""
-	for i := 0; i < maxLen; i++ {
-		pad += " "
-	}
+	pad := strings.Repeat(" ", maxLen)
 	for _, envVar := range envp {
 		fmt.Printf("%s%s = %s\n", envVar.Name, pad[:maxLen-len(envVar.Name)], envVar.Value)
 	}
