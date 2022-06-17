@@ -133,7 +133,8 @@ func run(cmd *cobra.Command, args []string) error {
 			log.Fatal(err.Error())
 		}
 	}()
-	return proc.Wait()
+	log.Printf("Error: %v\n", proc.Wait())
+	return nil
 }
 
 func main() {
