@@ -17,17 +17,16 @@ go install github.com/rprtr258/rwenv/cmd/rwenv@latest
 
 ## Usage
 ```
-rwenv [flags] cmd...
+rwenv [flags] ...cmd
 
 Flags:
   -e, --env strings   Env files to take vars from
   -h, --help          help for rwenv
   -i, --inherit       Inherit shell env vars
-  -v, --verbose       Print steps
+  -v, --verbose       Print var reading info
 ```
 
 ### Examples
-
 ```
 rwenv -e .env env
 ```

@@ -33,7 +33,7 @@ var (
 
 func init() {
 	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env files to take vars from")
-	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print steps")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print var reading info")
 	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
 
 	var err error
