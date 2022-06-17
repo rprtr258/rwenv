@@ -27,11 +27,15 @@ var (
 		Short:   "Run command with environment taken from file",
 		Args:    cobra.MinimumNArgs(1),
 		RunE:    run,
-		Example: "TODO: add",
+		Example: "rwenv -e .env env",
 	}
 )
 
 func init() {
+	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env files to take vars from")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print steps")
+	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
+
 	var err error
 	envVarLine, err = regexp.Compile("^[A-Z_]+=.*$")
 	if err != nil {
@@ -47,13 +51,13 @@ func readFileLines(envFile string) ([]string, error) {
 	return strings.Split(string(content), "\n"), nil
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	proc := exec.Command(args[0], args[1:]...)
+func makeEnvList() ([]string, error) {
+	var res []string
 	if inherit {
 		if verbose {
 			log.Println("inheriting env vars...")
 		}
-		proc.Env = os.Environ()
+		res = os.Environ()
 	}
 	for _, envFile := range envFiles {
 		if verbose {
@@ -61,7 +65,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		lines, err := readFileLines(envFile)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		envp := []string{}
 		for _, line := range lines {
@@ -75,8 +79,18 @@ func run(cmd *cobra.Command, args []string) error {
 			}
 
 		}
-		proc.Env = append(proc.Env, envp...)
+		copy(res, envp)
 	}
+	return res, nil
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	proc := exec.Command(args[0], args[1:]...)
+	envp, err := makeEnvList()
+	if err != nil {
+		return err
+	}
+	proc.Env = envp
 	stdin, err := proc.StdinPipe()
 	if err != nil {
 		return err
@@ -89,26 +103,30 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	proc.Start()
+	if err := proc.Start(); err != nil {
+		return err
+	}
 	go func() {
-		io.Copy(stdin, os.Stdin)
+		if _, err := io.Copy(stdin, os.Stdin); err != nil {
+			log.Fatal(err.Error())
+		}
 		os.Stdin.Close()
 	}()
 	go func() {
-		io.Copy(os.Stdout, stdout)
+		if _, err := io.Copy(os.Stdout, stdout); err != nil {
+			log.Fatal(err.Error())
+		}
 		os.Stdout.Close()
 	}()
 	go func() {
-		io.Copy(os.Stderr, stderr)
+		if _, err := io.Copy(os.Stderr, stderr); err != nil {
+			log.Fatal(err.Error())
+		}
 	}()
 	return proc.Wait()
 }
 
 func main() {
-	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env file to take vars from")
-	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print steps")
-	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
-
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err.Error())
 	}

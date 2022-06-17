@@ -14,6 +14,10 @@ type EnvVar struct {
 	Value string
 }
 
+// main pretty prints env vars:
+//   - sorted by name
+//   - cutting long values to begin...end
+//   - with padding separating names and values
 func main() {
 	envp := []EnvVar{}
 	for _, envVar := range os.Environ() {
