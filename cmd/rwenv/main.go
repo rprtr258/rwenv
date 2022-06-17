@@ -133,6 +133,7 @@ func run(cmd *cobra.Command, args []string) error {
 			log.Fatal(err.Error())
 		}
 	}()
+	// TODO: fix showing usage on cmd error
 	log.Printf("Error: %v\n", proc.Wait())
 	return nil
 }
