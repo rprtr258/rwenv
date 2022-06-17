@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,7 +11,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var envVarLine *regexp.Regexp
+const (
+	setEnvLineFormat = "    set env  %q\n"
+	ignoreLineFormat = "    ignoring %q\n"
+)
+
+var (
+	envVarLine *regexp.Regexp
+
+	envFiles []string
+	verbose  bool
+	inherit  bool
+	rootCmd  = cobra.Command{
+		Use:     "rwenv",
+		Short:   "Run command with environment taken from file",
+		Args:    cobra.MinimumNArgs(1),
+		RunE:    run,
+		Example: "TODO: add",
+	}
+)
 
 func init() {
 	var err error
@@ -31,36 +48,35 @@ func readFileLines(envFile string) ([]string, error) {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	envFile, err := cmd.Flags().GetString("env")
-	if err != nil {
-		return err
-	}
-	verbose, err := cmd.Flags().GetBool("verbose")
-	if err != nil {
-		return err
-	}
-	parent, err := cmd.Flags().GetBool("parent")
-	if err != nil {
-		return err
-	}
-	lines, err := readFileLines(envFile)
-	if err != nil {
-		return err
-	}
-	envp := []string{}
-	for _, line := range lines {
-		if envVarLine.MatchString(line) {
-			envp = append(envp, line)
-			if verbose {
-				fmt.Println("set env", line)
-			}
-		}
-	}
 	proc := exec.Command(args[0], args[1:]...)
-	if parent {
+	if inherit {
+		if verbose {
+			log.Println("inheriting env vars...")
+		}
 		proc.Env = os.Environ()
 	}
-	proc.Env = append(proc.Env, envp...)
+	for _, envFile := range envFiles {
+		if verbose {
+			log.Println("reading env file", envFile)
+		}
+		lines, err := readFileLines(envFile)
+		if err != nil {
+			return err
+		}
+		envp := []string{}
+		for _, line := range lines {
+			if envVarLine.MatchString(line) {
+				envp = append(envp, line)
+				if verbose {
+					log.Printf(setEnvLineFormat, line)
+				}
+			} else if verbose {
+				log.Printf(ignoreLineFormat, line)
+			}
+
+		}
+		proc.Env = append(proc.Env, envp...)
+	}
 	stdin, err := proc.StdinPipe()
 	if err != nil {
 		return err
@@ -89,16 +105,9 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func main() {
-	rootCmd := cobra.Command{
-		Use:     "rwenv",
-		Short:   "Run command with environment taken from file",
-		Args:    cobra.MinimumNArgs(1),
-		RunE:    run,
-		Example: "TODO: add",
-	}
-	rootCmd.Flags().StringP("env", "e", "", "Env file to take vars from")
-	rootCmd.Flags().BoolP("verbose", "v", false, "Print steps")
-	rootCmd.Flags().BoolP("parent", "p", false, "Add parent env vars")
+	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env file to take vars from")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print steps")
+	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err.Error())
