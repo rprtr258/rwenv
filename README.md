@@ -20,11 +20,11 @@ go install github.com/rprtr258/rwenv/cmd/rwenv@latest
 rwenv [flags] ...cmd
 
 Flags:
-  -e, --env strings        Env files to take vars from
+  -e, --env strings        env files to take vars from
   -h, --help               help for rwenv
-  -i, --inherit            Inherit shell env vars
-  -o, --override strings   Additional env vars in form of VAR_NAME=VALUE
-  -v, --verbose            Print var reading info
+  -i, --inherit            inherit shell env vars
+  -o, --override strings   additional env vars in form of VAR_NAME=VALUE
+  -v, --verbose            print var reading info
 ```
 
 ### Examples

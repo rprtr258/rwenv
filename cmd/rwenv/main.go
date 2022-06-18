@@ -36,10 +36,10 @@ var (
 )
 
 func init() {
-	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "Env files to take vars from")
-	rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "Additional env vars in form of VAR_NAME=VALUE")
-	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print var reading info")
-	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "Inherit shell env vars")
+	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "env files to take vars from")
+	rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "additional env vars in form of VAR_NAME=VALUE")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print var reading info")
+	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "inherit shell env vars")
 
 	var err error
 	envVarLine, err = regexp.Compile("^[A-Z_]+=.*$")
