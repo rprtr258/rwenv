@@ -1,2 +1,4 @@
 # binary
 rwenv
+# dev tmp files
+.env
