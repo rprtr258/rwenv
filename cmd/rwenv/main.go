@@ -25,11 +25,13 @@ var (
 	verbose      bool
 	inherit      bool
 	rootCmd      = cobra.Command{
-		Use:     "rwenv",
-		Short:   "Run command with environment taken from file",
-		Args:    cobra.MinimumNArgs(1),
-		RunE:    run,
-		Example: "rwenv -e .env env",
+		Use:           "rwenv",
+		Short:         "Run command with environment taken from file",
+		Args:          cobra.MinimumNArgs(1),
+		RunE:          run,
+		Example:       "rwenv -e .env env",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 )
 
@@ -99,13 +101,11 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// TODO: fix showing usage on cmd error
 	program, err := exec.LookPath(args[0])
 	if err != nil {
 		return err
 	}
-	log.Printf("Error: %v\n", syscall.Exec(program, args, envp))
-	return nil
+	return syscall.Exec(program, args, envp)
 }
 
 func main() {
