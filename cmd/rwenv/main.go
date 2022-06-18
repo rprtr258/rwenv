@@ -18,8 +18,18 @@ const (
 var (
 	envVarLine *regexp.Regexp
 
-	// Short:         "Run command with environment taken from file",
-	// Example:       "rwenv -e .env env",
+	usage = `rwenv [flags | [-e env-file]... | [-o override]...] cmd...
+Run command with environment taken from file
+
+Example:
+  rwenv -e .env env
+
+Flags:
+  -e, --env env-file       env files to take vars from
+  -h, --help               show this message
+  -i, --inherit            inherit shell env vars
+  -o, --override override  additional env vars in form of VAR_NAME=VALUE
+  -v, --verbose            print var reading info`
 )
 
 type Options struct {
@@ -27,15 +37,11 @@ type Options struct {
 	envOverrides []string
 	verbose      bool
 	inherit      bool
+	help         bool
 	cmd          []string
 }
 
 func init() {
-	// rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "env files to take vars from")
-	// rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "additional env vars in form of VAR_NAME=VALUE")
-	// rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print var reading info")
-	// rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "inherit shell env vars")
-
 	var err error
 	envVarLine, err = regexp.Compile("^[A-Z_]+=.*$")
 	if err != nil {
@@ -92,6 +98,10 @@ func makeEnvList(opts Options) ([]string, error) {
 }
 
 func run(opts Options) error {
+	if opts.help {
+		fmt.Println(usage)
+		return nil
+	}
 	envp, err := makeEnvList(opts)
 	if err != nil {
 		return err
@@ -126,6 +136,9 @@ func parseArgs() (opts Options, err error) {
 			opts.verbose = true
 		case argv[i] == "-i" || argv[i] == "--inherit":
 			opts.inherit = true
+		case argv[i] == "-h" || argv[i] == "--help":
+			opts.help = true
+			return
 		default:
 			opts.cmd = argv[i:]
 			return
