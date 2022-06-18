@@ -10,11 +10,6 @@ import (
 	"syscall"
 )
 
-const (
-	setEnvLineFormat  = "    set env  %q\n"
-	overrideVarFormat = "override %q\n"
-)
-
 var (
 	envVarLine *regexp.Regexp
 
@@ -78,7 +73,7 @@ func makeEnvList(opts Options) ([]string, error) {
 			if envVarLine.MatchString(line) {
 				envp = append(envp, line)
 				if opts.verbose {
-					log.Printf(setEnvLineFormat, line)
+					log.Printf("    set env  %q\n", line)
 				}
 			}
 
@@ -90,7 +85,7 @@ func makeEnvList(opts Options) ([]string, error) {
 			return nil, fmt.Errorf("wrong env var format: %q", envVar)
 		}
 		if opts.verbose {
-			log.Printf(overrideVarFormat, envVar)
+			log.Printf("override %q\n", envVar)
 		}
 		res = append(res, envVar)
 	}
