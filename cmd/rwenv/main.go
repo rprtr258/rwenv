@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -20,26 +18,23 @@ const (
 var (
 	envVarLine *regexp.Regexp
 
+	// Short:         "Run command with environment taken from file",
+	// Example:       "rwenv -e .env env",
+)
+
+type Options struct {
 	envFiles     []string
 	envOverrides []string
 	verbose      bool
 	inherit      bool
-	rootCmd      = cobra.Command{
-		Use:           "rwenv",
-		Short:         "Run command with environment taken from file",
-		Args:          cobra.MinimumNArgs(1),
-		RunE:          run,
-		Example:       "rwenv -e .env env",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-	}
-)
+	cmd          []string
+}
 
 func init() {
-	rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "env files to take vars from")
-	rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "additional env vars in form of VAR_NAME=VALUE")
-	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print var reading info")
-	rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "inherit shell env vars")
+	// rootCmd.Flags().StringSliceVarP(&envFiles, "env", "e", nil, "env files to take vars from")
+	// rootCmd.Flags().StringSliceVarP(&envOverrides, "override", "o", nil, "additional env vars in form of VAR_NAME=VALUE")
+	// rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print var reading info")
+	// rootCmd.Flags().BoolVarP(&inherit, "inherit", "i", false, "inherit shell env vars")
 
 	var err error
 	envVarLine, err = regexp.Compile("^[A-Z_]+=.*$")
@@ -56,16 +51,16 @@ func readFileLines(envFile string) ([]string, error) {
 	return strings.Split(string(content), "\n"), nil
 }
 
-func makeEnvList() ([]string, error) {
+func makeEnvList(opts Options) ([]string, error) {
 	var res []string
-	if inherit {
-		if verbose {
+	if opts.inherit {
+		if opts.verbose {
 			log.Println("inheriting env vars...")
 		}
 		res = os.Environ()
 	}
-	for _, envFile := range envFiles {
-		if verbose {
+	for _, envFile := range opts.envFiles {
+		if opts.verbose {
 			log.Println("reading env file", envFile)
 		}
 		lines, err := readFileLines(envFile)
@@ -76,7 +71,7 @@ func makeEnvList() ([]string, error) {
 		for _, line := range lines {
 			if envVarLine.MatchString(line) {
 				envp = append(envp, line)
-				if verbose {
+				if opts.verbose {
 					log.Printf(setEnvLineFormat, line)
 				}
 			}
@@ -84,11 +79,11 @@ func makeEnvList() ([]string, error) {
 		}
 		res = append(res, envp...)
 	}
-	for _, envVar := range envOverrides {
+	for _, envVar := range opts.envOverrides {
 		if !envVarLine.MatchString(envVar) {
 			return nil, fmt.Errorf("wrong env var format: %q", envVar)
 		}
-		if verbose {
+		if opts.verbose {
 			log.Printf(overrideVarFormat, envVar)
 		}
 		res = append(res, envVar)
@@ -96,20 +91,56 @@ func makeEnvList() ([]string, error) {
 	return res, nil
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	envp, err := makeEnvList()
+func run(opts Options) error {
+	envp, err := makeEnvList(opts)
 	if err != nil {
 		return err
 	}
-	program, err := exec.LookPath(args[0])
+	program, err := exec.LookPath(opts.cmd[0])
 	if err != nil {
 		return err
 	}
-	return syscall.Exec(program, args, envp)
+	return syscall.Exec(program, opts.cmd, envp)
+}
+
+func parseArgs() (opts Options, err error) {
+	argv := os.Args
+	argN := len(argv)
+	for i := 1; i < argN; i++ {
+		switch {
+		case argv[i] == "-e" || argv[i] == "--env":
+			i++
+			if i == argN {
+				err = fmt.Errorf("env file is expected after %s", argv[i-1])
+				return
+			}
+			opts.envFiles = append(opts.envFiles, argv[i])
+		case argv[i] == "-o" || argv[i] == "--override":
+			i++
+			if i == argN {
+				err = fmt.Errorf("env var in form of VAR_NAME=VALUE is expected after %s", argv[i-1])
+				return
+			}
+			opts.envOverrides = append(opts.envOverrides, argv[i])
+		case argv[i] == "-v" || argv[i] == "--verbose":
+			opts.verbose = true
+		case argv[i] == "-i" || argv[i] == "--inherit":
+			opts.inherit = true
+		default:
+			opts.cmd = argv[i:]
+			return
+		}
+	}
+	err = fmt.Errorf("command to run is not provided")
+	return
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	opts, err := parseArgs()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := run(opts); err != nil {
 		log.Fatal(err.Error())
 	}
 }
