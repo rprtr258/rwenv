@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	envVarLine *regexp.Regexp
+	envVarRE = regexp.MustCompile("^([A-Z_]+)=(.*)$")
 
 	usage = `rwenv [flags | [-e env-file]... | [-o override]...] cmd...
 Run command with environment taken from file
@@ -36,14 +36,6 @@ type Options struct {
 	cmd          []string
 }
 
-func init() {
-	var err error
-	envVarLine, err = regexp.Compile("^[A-Z_]+=.*$")
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-}
-
 func readFileLines(envFile string) ([]string, error) {
 	content, err := os.ReadFile(envFile)
 	if err != nil {
@@ -52,13 +44,16 @@ func readFileLines(envFile string) ([]string, error) {
 	return strings.Split(string(content), "\n"), nil
 }
 
-func makeEnvList(opts Options) ([]string, error) {
-	var res []string
+func makeEnvList(opts Options) (map[string]string, error) {
+	res := make(map[string]string)
 	if opts.inherit {
 		if opts.verbose {
 			log.Println("inheriting env vars...")
 		}
-		res = os.Environ()
+		for _, envVarLine := range os.Environ() {
+			match := envVarRE.FindStringSubmatch(envVarLine)
+			res[match[1]] = match[2]
+		}
 	}
 	for _, envFile := range opts.envFiles {
 		if opts.verbose {
@@ -68,26 +63,26 @@ func makeEnvList(opts Options) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		envp := []string{}
-		for _, line := range lines {
-			if envVarLine.MatchString(line) {
-				envp = append(envp, line)
+		for _, envVarLine := range lines {
+			if envVarRE.MatchString(envVarLine) {
 				if opts.verbose {
-					log.Printf("    set env  %q\n", line)
+					log.Printf("    set env  %q\n", envVarLine)
 				}
+				match := envVarRE.FindStringSubmatch(envVarLine)
+				res[match[1]] = match[2]
 			}
 
 		}
-		res = append(res, envp...)
 	}
-	for _, envVar := range opts.envOverrides {
-		if !envVarLine.MatchString(envVar) {
-			return nil, fmt.Errorf("wrong env var format: %q", envVar)
+	for _, envVarLine := range opts.envOverrides {
+		if !envVarRE.MatchString(envVarLine) {
+			return nil, fmt.Errorf("wrong env var format: %q", envVarLine)
 		}
 		if opts.verbose {
-			log.Printf("override %q\n", envVar)
+			log.Printf("override %q\n", envVarLine)
 		}
-		res = append(res, envVar)
+		match := envVarRE.FindStringSubmatch(envVarLine)
+		res[match[1]] = match[2]
 	}
 	return res, nil
 }
@@ -97,13 +92,17 @@ func run(opts Options) error {
 		fmt.Println(usage)
 		return nil
 	}
-	envp, err := makeEnvList(opts)
+	env, err := makeEnvList(opts)
 	if err != nil {
 		return err
 	}
 	program, err := exec.LookPath(opts.cmd[0])
 	if err != nil {
 		return err
+	}
+	envp := make([]string, 0, len(env))
+	for varName, varValue := range env {
+		envp = append(envp, fmt.Sprintf("%s=%s", varName, varValue))
 	}
 	return syscall.Exec(program, opts.cmd, envp)
 }
