@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	envVarRE = regexp.MustCompile("^([A-Z_]+)=(.*)$")
+	envVarRE = regexp.MustCompile("^([A-Z0-9_]+)=(.*)$")
 
 	usage = `rwenv [flags | [-e env-file]... | [-o override]...] cmd...
 Run command with environment taken from file
@@ -52,6 +52,9 @@ func makeEnvList(opts Options) (map[string]string, error) {
 		}
 		for _, envVarLine := range os.Environ() {
 			match := envVarRE.FindStringSubmatch(envVarLine)
+			if opts.verbose {
+				log.Printf("setting env var %s\n", envVarLine)
+			}
 			res[match[1]] = match[2]
 		}
 	}
