@@ -8,33 +8,17 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	envVarRE = regexp.MustCompile("^([A-Z0-9_]+)=(.*)$")
-
-	usage = `rwenv [flags | [-e env-file]... | [-o override]...] cmd...
-Run command with environment taken from file
-
-Example:
-  rwenv -e .env env
-
-Flags:
-  -e, --env env-file       env files to take vars from
-  -h, --help               show this message
-  -i, --inherit            inherit shell env vars
-  -o, --override override  additional env vars in form of VAR_NAME=VALUE
-  -v, --verbose            print var reading info`
+	_inherit   bool
+	_verbose   bool
+	_envFiles  = cli.NewStringSlice()
+	_overrides = cli.NewStringSlice()
+	_envVarRE  = regexp.MustCompile("^([A-Z0-9_]+)=(.*)$")
 )
-
-type Options struct {
-	envFiles     []string
-	envOverrides []string
-	verbose      bool
-	inherit      bool
-	help         bool
-	cmd          []string
-}
 
 func readFileLines(envFile string) ([]string, error) {
 	content, err := os.ReadFile(envFile)
@@ -44,22 +28,22 @@ func readFileLines(envFile string) ([]string, error) {
 	return strings.Split(string(content), "\n"), nil
 }
 
-func makeEnvList(opts Options) (map[string]string, error) {
-	res := make(map[string]string)
-	if opts.inherit {
-		if opts.verbose {
+func collectEnv() (map[string]string, error) {
+	envp := make(map[string]string)
+	if _inherit {
+		if _verbose {
 			log.Println("inheriting env vars...")
 		}
 		for _, envVarLine := range os.Environ() {
-			match := envVarRE.FindStringSubmatch(envVarLine)
-			if opts.verbose {
+			match := _envVarRE.FindStringSubmatch(envVarLine)
+			if _verbose {
 				log.Printf("setting env var %s\n", envVarLine)
 			}
-			res[match[1]] = match[2]
+			envp[match[1]] = match[2]
 		}
 	}
-	for _, envFile := range opts.envFiles {
-		if opts.verbose {
+	for _, envFile := range _envFiles.Value() {
+		if _verbose {
 			log.Println("reading env file", envFile)
 		}
 		lines, err := readFileLines(envFile)
@@ -67,90 +51,95 @@ func makeEnvList(opts Options) (map[string]string, error) {
 			return nil, err
 		}
 		for _, envVarLine := range lines {
-			if envVarRE.MatchString(envVarLine) {
-				if opts.verbose {
+			if _envVarRE.MatchString(envVarLine) {
+				if _verbose {
 					log.Printf("    set env  %q\n", envVarLine)
 				}
-				match := envVarRE.FindStringSubmatch(envVarLine)
-				res[match[1]] = match[2]
+				match := _envVarRE.FindStringSubmatch(envVarLine)
+				envp[match[1]] = match[2]
 			}
-
 		}
 	}
-	for _, envVarLine := range opts.envOverrides {
-		if !envVarRE.MatchString(envVarLine) {
+	for _, envVarLine := range _overrides.Value() {
+		if !_envVarRE.MatchString(envVarLine) {
 			return nil, fmt.Errorf("wrong env var format: %q", envVarLine)
 		}
-		if opts.verbose {
+		if _verbose {
 			log.Printf("override %q\n", envVarLine)
 		}
-		match := envVarRE.FindStringSubmatch(envVarLine)
-		res[match[1]] = match[2]
+		match := _envVarRE.FindStringSubmatch(envVarLine)
+		envp[match[1]] = match[2]
 	}
-	return res, nil
+	return envp, nil
 }
 
-func run(opts Options) error {
-	if opts.help {
-		fmt.Println(usage)
-		return nil
-	}
-	env, err := makeEnvList(opts)
-	if err != nil {
-		return err
-	}
-	program, err := exec.LookPath(opts.cmd[0])
-	if err != nil {
-		return err
-	}
+func envToList(env map[string]string) []string {
 	envp := make([]string, 0, len(env))
 	for varName, varValue := range env {
 		envp = append(envp, fmt.Sprintf("%s=%s", varName, varValue))
 	}
-	return syscall.Exec(program, opts.cmd, envp)
+	return envp
 }
 
-func parseArgs() (opts Options, err error) {
-	argv := os.Args
-	argN := len(argv)
-	for i := 1; i < argN; i++ {
-		switch {
-		case argv[i] == "-e" || argv[i] == "--env":
-			i++
-			if i == argN {
-				err = fmt.Errorf("env file is expected after %s", argv[i-1])
-				return
-			}
-			opts.envFiles = append(opts.envFiles, argv[i])
-		case argv[i] == "-o" || argv[i] == "--override":
-			i++
-			if i == argN {
-				err = fmt.Errorf("env var in form of VAR_NAME=VALUE is expected after %s", argv[i-1])
-				return
-			}
-			opts.envOverrides = append(opts.envOverrides, argv[i])
-		case argv[i] == "-v" || argv[i] == "--verbose":
-			opts.verbose = true
-		case argv[i] == "-i" || argv[i] == "--inherit":
-			opts.inherit = true
-		case argv[i] == "-h" || argv[i] == "--help":
-			opts.help = true
-			return
-		default:
-			opts.cmd = argv[i:]
-			return
-		}
+func run(ctx *cli.Context) error {
+	args := ctx.Args().Slice()
+
+	if len(args) == 0 {
+		// TODO: maybe pretty print env in that case
+		return fmt.Errorf("command to run is not provided")
 	}
-	err = fmt.Errorf("command to run is not provided")
-	return
+
+	program, err := exec.LookPath(args[0])
+	if err != nil {
+		return err
+	}
+
+	envp, err := collectEnv()
+	if err != nil {
+		return err
+	}
+
+	return syscall.Exec(program, args, envToList(envp))
 }
 
 func main() {
-	opts, err := parseArgs()
-	if err != nil {
-		log.Fatal(err.Error())
+	app := &cli.App{
+		Usage: "Run command with environment taken from file",
+		UsageText: `rwenv [-i] [-v] [-e env-file]... [-o override]... cmd...
+
+Example:
+	rwenv -e .env env`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:        "env",
+				Aliases:     []string{"e"},
+				Usage:       "env files to take vars from",
+				Destination: _envFiles,
+			},
+			&cli.StringSliceFlag{
+				Name:        "override",
+				Aliases:     []string{"o"},
+				Usage:       "additional env vars in form of VAR_NAME=VALUE",
+				Destination: _overrides,
+			},
+			&cli.BoolFlag{
+				Name:        "verbose",
+				Aliases:     []string{"v"},
+				Usage:       "print var reading info",
+				Destination: &_verbose,
+			},
+			&cli.BoolFlag{
+				Name:        "inherit",
+				Aliases:     []string{"i"},
+				Usage:       "inherit shell env vars",
+				Destination: &_inherit,
+			},
+		},
+		Action:                 run,
+		HideHelpCommand:        true,
+		UseShortOptionHandling: true,
 	}
-	if err := run(opts); err != nil {
-		log.Fatal(err.Error())
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
 }
