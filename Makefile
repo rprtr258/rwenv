@@ -4,11 +4,11 @@ RWENV:=go run cmd/rwenv/main.go
 help: # show list of all commands
 	@grep -E '^[a-zA-Z_-]+:.*?# .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?# "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: run
+.PHONY: run-dotenv
 run-dotenv: # test run on .env file
 	$(RWENV) -vie .env go run cmd/show_env/main.go
 
-.PHONY: run
+.PHONY: run-rwenv-dotenv
 run-rwenv-dotenv: # test run rwenv on rwenv on .env file
 	$(RWENV) -vi go run cmd/rwenv/main.go -e .env -vi go run cmd/show_env/main.go
 
@@ -23,5 +23,5 @@ todo: # show list of all todos left in code
 	@rg 'TODO' --glob '**/*.go' || echo 'All done!'
 
 .PHONY: build
-build:
+build: # build executable
 	go build -o rwenv cmd/rwenv/main.go
