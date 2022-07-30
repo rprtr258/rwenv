@@ -1,14 +1,16 @@
+RWENV:=go run cmd/rwenv/main.go
+
 .PHONY: help
 help: # show list of all commands
 	@grep -E '^[a-zA-Z_-]+:.*?# .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?# "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: run
 run-dotenv: # test run on .env file
-	go run cmd/rwenv/main.go -vie .env go run cmd/show_env/main.go
+	$(RWENV) -vie .env go run cmd/show_env/main.go
 
 .PHONY: run
 run-rwenv-dotenv: # test run rwenv on rwenv on .env file
-	go run cmd/rwenv/main.go -vi go run cmd/rwenv/main.go -e .env -vi go run cmd/show_env/main.go
+	$(RWENV) -vi go run cmd/rwenv/main.go -e .env -vi go run cmd/show_env/main.go
 
 .PHONY: lint
 lint: # run linter
