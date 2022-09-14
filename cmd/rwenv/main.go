@@ -39,6 +39,10 @@ func collectEnv() (map[string]string, error) {
 			if _verbose {
 				log.Printf("setting env var %s\n", envVarLine)
 			}
+			if len(match) != 3 {
+				log.Println("WTF", match)
+				continue
+			}
 			envp[match[1]] = match[2]
 		}
 	}
