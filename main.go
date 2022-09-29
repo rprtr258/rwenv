@@ -65,7 +65,6 @@ func collectEnv() (map[string]string, error) {
 			envp[key] = value
 		}
 	}
-	log.Println("files", _envFiles.Value())
 	for _, envFile := range _envFiles.Value() {
 		if _verbose {
 			log.Println("reading env file", envFile)
@@ -82,7 +81,9 @@ func collectEnv() (map[string]string, error) {
 				}
 				continue
 			}
-			log.Printf("    set env  %s=%q\n", key, value)
+			if _verbose {
+				log.Printf("    set env  %s=%q\n", key, value)
+			}
 			envp[key] = value
 		}
 	}
