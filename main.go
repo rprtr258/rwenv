@@ -59,7 +59,9 @@ func collectEnv() (map[string]string, error) {
 				log.Printf("incorrect env var %q: %s\n", envVarLine, err.Error())
 				continue
 			}
-			log.Printf("    set env  %s=%q\n", key, value)
+			if _verbose {
+				log.Printf("    set env  %s=%q\n", key, value)
+			}
 			envp[key] = value
 		}
 	}
