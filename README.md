@@ -12,11 +12,11 @@ so I wrote my own.
 
 ## Install
 ```bash
-go install github.com/rprtr258/rwenv/cmd@latest
+go install github.com/rprtr258/rwenv@latest
 ```
 
 ## Dev
 You can test `rwenv` using env pretty printer like so:
 ```bash
-go run cmd/main.go -e .env -vi go run cmd/main.go
+go run main.go -e .env -vi go run main.go
 ```

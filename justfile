@@ -1,4 +1,4 @@
-RWENV:="go run cmd/main.go"
+RWENV:="go run main.go"
 
 # test run on .env file
 run-dotenv:
@@ -20,4 +20,4 @@ run-rwenv-dotenv:
 
 # build executable
 @build:
-	go build -o rwenv cmd/main.go
+	go build -o rwenv main.go
