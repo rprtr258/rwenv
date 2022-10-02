@@ -12,7 +12,7 @@ so I wrote my own.
 
 ## Install
 ```bash
-go install github.com/rprtr258/rwenv
+go install github.com/rprtr258/rwenv@latest
 ```
 
 ## Dev
