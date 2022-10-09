@@ -21,3 +21,8 @@ run-rwenv-dotenv:
 # build executable
 @build:
 	go build -o rwenv main.go
+
+# bump dependencies
+@bump:
+  go get -u ./...
+  go mod tidy
