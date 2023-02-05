@@ -43,7 +43,17 @@ func splitEnv(env string) (string, string, error) {
 		return "", "", errors.New("No equal sign found")
 	}
 
-	return string(runes[:eqSignIdx]), string(runes[eqSignIdx+1:]), nil
+	key := string(runes[:eqSignIdx])
+
+	valueRunes := runes[eqSignIdx+1:]
+	if len(valueRunes) >= 2 &&
+		valueRunes[0] == '"' &&
+		valueRunes[len(valueRunes)-1] == '"' {
+		valueRunes = valueRunes[1 : len(valueRunes)-1]
+	}
+	value := string(valueRunes)
+
+	return key, value, nil
 }
 
 func collectEnv() (map[string]string, error) {
