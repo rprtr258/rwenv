@@ -9,16 +9,144 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf8"
 
 	"github.com/urfave/cli/v2"
 )
 
+// CLI flags.
 var (
 	_inherit   bool
 	_verbose   bool
 	_envFiles  = cli.NewStringSlice()
 	_overrides = cli.NewStringSlice()
+	app        = &cli.App{
+		Usage: "Run command with environment taken from file",
+		UsageText: `Run cmd using env:
+	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
+Show env to be used:
+	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
+
+Example:
+	rwenv             # show env
+	rwenv -e .env env # show env with added vars from .env`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:        "env",
+				Aliases:     []string{"e"},
+				Usage:       "env files to take vars from",
+				Destination: _envFiles,
+				Category:    "",
+				DefaultText: "",
+				FilePath:    "",
+				Required:    false,
+				Hidden:      false,
+				HasBeenSet:  false,
+				Value:       nil,
+				EnvVars:     nil,
+				TakesFile:   false,
+				Action:      nil,
+				KeepSpace:   false,
+			},
+			&cli.StringSliceFlag{
+				Name:        "override",
+				Aliases:     []string{"o"},
+				Usage:       "additional env vars in form of VAR_NAME=VALUE",
+				Destination: _overrides,
+				Category:    "",
+				DefaultText: "",
+				FilePath:    "",
+				Required:    false,
+				Hidden:      false,
+				HasBeenSet:  false,
+				Value:       nil,
+				EnvVars:     nil,
+				TakesFile:   false,
+				Action:      nil,
+				KeepSpace:   false,
+			},
+			&cli.BoolFlag{
+				Name:               "verbose",
+				Aliases:            []string{"v"},
+				Usage:              "print var reading info",
+				Destination:        &_verbose,
+				Category:           "",
+				DefaultText:        "",
+				FilePath:           "",
+				Required:           false,
+				Hidden:             false,
+				HasBeenSet:         false,
+				Value:              false,
+				EnvVars:            nil,
+				Action:             nil,
+				Count:              nil,
+				DisableDefaultText: false,
+			},
+			&cli.BoolFlag{
+				Name:               "inherit",
+				Aliases:            []string{"i"},
+				Usage:              "inherit shell env vars",
+				Destination:        &_inherit,
+				Category:           "",
+				DefaultText:        "",
+				FilePath:           "",
+				Required:           false,
+				Hidden:             false,
+				HasBeenSet:         false,
+				Value:              false,
+				EnvVars:            nil,
+				Action:             nil,
+				Count:              nil,
+				DisableDefaultText: false,
+			},
+		},
+		Action:                    run,
+		HideHelpCommand:           true,
+		UseShortOptionHandling:    true,
+		Name:                      "",
+		HelpName:                  "",
+		ArgsUsage:                 "",
+		Version:                   "",
+		Description:               "",
+		DefaultCommand:            "",
+		Commands:                  nil,
+		EnableBashCompletion:      false,
+		HideHelp:                  false,
+		HideVersion:               false,
+		BashComplete:              nil,
+		Before:                    nil,
+		After:                     nil,
+		CommandNotFound:           nil,
+		OnUsageError:              nil,
+		InvalidFlagAccessHandler:  nil,
+		Compiled:                  time.Time{},
+		Authors:                   nil,
+		Copyright:                 "",
+		Reader:                    nil,
+		Writer:                    nil,
+		ErrWriter:                 nil,
+		ExitErrHandler:            nil,
+		Metadata:                  nil,
+		ExtraInfo:                 nil,
+		CustomAppHelpTemplate:     "",
+		SliceFlagSeparator:        "",
+		DisableSliceFlagSeparator: false,
+		Suggest:                   false,
+		AllowExtFlags:             false,
+		SkipFlagParsing:           false,
+	}
+)
+
+// Errors.
+var (
+	errNoEqualSign = errors.New("no equal sign found")
+)
+
+// Constants.
+const (
+	_maxFmtValueLen = 100
+	_fmtClipLen     = _maxFmtValueLen/2 - 1
 )
 
 type EnvVar struct {
@@ -29,18 +157,19 @@ type EnvVar struct {
 func readFileLines(envFile string) ([]string, error) {
 	content, err := os.ReadFile(envFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file: %w", err)
 	}
+
 	return strings.Split(string(content), "\n"), nil
 }
 
 // splitEnv of form key=value into (key, value, err),
-// err if something bad happened during splitting, e.g. no equal sign was found
+// err if something bad happened during splitting, e.g. no equal sign was found.
 func splitEnv(env string) (string, string, error) {
 	runes := []rune(env)
 	eqSignIdx := strings.IndexRune(env, '=')
 	if eqSignIdx == -1 {
-		return "", "", errors.New("No equal sign found")
+		return "", "", errNoEqualSign
 	}
 
 	key := string(runes[:eqSignIdx])
@@ -89,6 +218,7 @@ func collectEnv() (map[string]string, error) {
 				if _verbose {
 					log.Printf("    ignoring line %q: %s\n", envVarLine, err.Error())
 				}
+
 				continue
 			}
 			if _verbose {
@@ -106,6 +236,7 @@ func collectEnv() (map[string]string, error) {
 		}
 		envp[key] = value
 	}
+
 	return envp, nil
 }
 
@@ -127,10 +258,14 @@ func run(ctx *cli.Context) error {
 		//   - with padding separating names and values
 		envp := []EnvVar{}
 		for _, envVar := range os.Environ() {
-			parts := strings.SplitN(envVar, "=", 2)
+			parts := strings.SplitN(envVar, "=", 2) // TODO: change to regex
 			varValue := parts[1]
-			if len(varValue) > 100 {
-				varValue = varValue[:49] + "..." + varValue[len(varValue)-49:]
+			if len(varValue) > _maxFmtValueLen {
+				varValue = fmt.Sprintf(
+					"%s...%s",
+					varValue[:_fmtClipLen],
+					varValue[len(varValue)-_fmtClipLen:],
+				)
 			}
 			envp = append(envp, EnvVar{
 				Name:  parts[0],
@@ -151,12 +286,13 @@ func run(ctx *cli.Context) error {
 			padding := pad[:maxLen-utf8.RuneCountInString(envVar.Name)]
 			fmt.Printf("%s%s = %q\n", envVar.Name, padding, envVar.Value)
 		}
+
 		return nil
 	}
 
 	program, err := exec.LookPath(args[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("look executable path: %w", err)
 	}
 
 	envp, err := collectEnv()
@@ -164,51 +300,15 @@ func run(ctx *cli.Context) error {
 		return err
 	}
 
-	return syscall.Exec(program, args, envToList(envp))
+	if err := syscall.Exec(program, args, envToList(envp)); err != nil {
+		return fmt.Errorf("exec: %w", err)
+	}
+
+	return nil
 }
 
 // TODO: logs colors
 func main() {
-	app := &cli.App{
-		Usage: "Run command with environment taken from file",
-		UsageText: `Run cmd using env:
-	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
-Show env to be used:
-	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
-
-Example:
-	rwenv             # show env
-	rwenv -e .env env # show env with added vars from .env`,
-		Flags: []cli.Flag{
-			&cli.StringSliceFlag{
-				Name:        "env",
-				Aliases:     []string{"e"},
-				Usage:       "env files to take vars from",
-				Destination: _envFiles,
-			},
-			&cli.StringSliceFlag{
-				Name:        "override",
-				Aliases:     []string{"o"},
-				Usage:       "additional env vars in form of VAR_NAME=VALUE",
-				Destination: _overrides,
-			},
-			&cli.BoolFlag{
-				Name:        "verbose",
-				Aliases:     []string{"v"},
-				Usage:       "print var reading info",
-				Destination: &_verbose,
-			},
-			&cli.BoolFlag{
-				Name:        "inherit",
-				Aliases:     []string{"i"},
-				Usage:       "inherit shell env vars",
-				Destination: &_inherit,
-			},
-		},
-		Action:                 run,
-		HideHelpCommand:        true,
-		UseShortOptionHandling: true,
-	}
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
