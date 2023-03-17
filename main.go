@@ -248,45 +248,48 @@ func envToList(env map[string]string) []string {
 	return envp
 }
 
+func printEnvs() {
+	// just print env nicely:
+	//   - sorted by name
+	//   - cutting long values to begin...end
+	//   - with padding separating names and values
+	envp := []EnvVar{}
+	for _, envVar := range os.Environ() {
+		parts := strings.SplitN(envVar, "=", 2) // TODO: change to regex
+		varValue := parts[1]
+		if len(varValue) > _maxFmtValueLen {
+			varValue = fmt.Sprintf(
+				"%s...%s",
+				varValue[:_fmtClipLen],
+				varValue[len(varValue)-_fmtClipLen:],
+			)
+		}
+		envp = append(envp, EnvVar{
+			Name:  parts[0],
+			Value: varValue,
+		})
+	}
+	sort.Slice(envp, func(i, j int) bool {
+		return envp[i].Name < envp[j].Name
+	})
+	maxLen := 0
+	for _, envVar := range envp {
+		if len(envVar.Name) > maxLen {
+			maxLen = len(envVar.Name)
+		}
+	}
+	pad := strings.Repeat(" ", maxLen)
+	for _, envVar := range envp {
+		padding := pad[:maxLen-utf8.RuneCountInString(envVar.Name)]
+		fmt.Printf("%s%s = %q\n", envVar.Name, padding, envVar.Value)
+	}
+}
+
 func run(ctx *cli.Context) error {
 	args := ctx.Args().Slice()
 
 	if len(args) == 0 {
-		// just print env nicely:
-		//   - sorted by name
-		//   - cutting long values to begin...end
-		//   - with padding separating names and values
-		envp := []EnvVar{}
-		for _, envVar := range os.Environ() {
-			parts := strings.SplitN(envVar, "=", 2) // TODO: change to regex
-			varValue := parts[1]
-			if len(varValue) > _maxFmtValueLen {
-				varValue = fmt.Sprintf(
-					"%s...%s",
-					varValue[:_fmtClipLen],
-					varValue[len(varValue)-_fmtClipLen:],
-				)
-			}
-			envp = append(envp, EnvVar{
-				Name:  parts[0],
-				Value: varValue,
-			})
-		}
-		sort.Slice(envp, func(i, j int) bool {
-			return envp[i].Name < envp[j].Name
-		})
-		maxLen := 0
-		for _, envVar := range envp {
-			if len(envVar.Name) > maxLen {
-				maxLen = len(envVar.Name)
-			}
-		}
-		pad := strings.Repeat(" ", maxLen)
-		for _, envVar := range envp {
-			padding := pad[:maxLen-utf8.RuneCountInString(envVar.Name)]
-			fmt.Printf("%s%s = %q\n", envVar.Name, padding, envVar.Value)
-		}
-
+		printEnvs()
 		return nil
 	}
 
