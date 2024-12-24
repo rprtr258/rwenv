@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 	"unicode/utf8"
 
 	"github.com/urfave/cli/v2"
@@ -26,7 +25,7 @@ var (
 		UsageText: `Run cmd using env:
 	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
 Show env to be used:
-	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]... cmd...
+	rwenv [-i] [-v] [-e env-file]... [-o VAR=override]...
 
 Example:
 	rwenv             # show env
@@ -37,104 +36,29 @@ Example:
 				Aliases:     []string{"e"},
 				Usage:       "env files to take vars from",
 				Destination: _envFiles,
-				Category:    "",
-				DefaultText: "",
-				FilePath:    "",
-				Required:    false,
-				Hidden:      false,
-				HasBeenSet:  false,
-				Value:       nil,
-				EnvVars:     nil,
-				TakesFile:   false,
-				Action:      nil,
-				KeepSpace:   false,
 			},
 			&cli.StringSliceFlag{
 				Name:        "override",
 				Aliases:     []string{"o"},
 				Usage:       "additional env vars in form of VAR_NAME=VALUE",
 				Destination: _overrides,
-				Category:    "",
-				DefaultText: "",
-				FilePath:    "",
-				Required:    false,
-				Hidden:      false,
-				HasBeenSet:  false,
-				Value:       nil,
-				EnvVars:     nil,
-				TakesFile:   false,
-				Action:      nil,
-				KeepSpace:   false,
 			},
 			&cli.BoolFlag{
-				Name:               "verbose",
-				Aliases:            []string{"v"},
-				Usage:              "print var reading info",
-				Destination:        &_verbose,
-				Category:           "",
-				DefaultText:        "",
-				FilePath:           "",
-				Required:           false,
-				Hidden:             false,
-				HasBeenSet:         false,
-				Value:              false,
-				EnvVars:            nil,
-				Action:             nil,
-				Count:              nil,
-				DisableDefaultText: false,
+				Name:        "verbose",
+				Aliases:     []string{"v"},
+				Usage:       "print var reading info",
+				Destination: &_verbose,
 			},
 			&cli.BoolFlag{
-				Name:               "inherit",
-				Aliases:            []string{"i"},
-				Usage:              "inherit shell env vars",
-				Destination:        &_inherit,
-				Category:           "",
-				DefaultText:        "",
-				FilePath:           "",
-				Required:           false,
-				Hidden:             false,
-				HasBeenSet:         false,
-				Value:              false,
-				EnvVars:            nil,
-				Action:             nil,
-				Count:              nil,
-				DisableDefaultText: false,
+				Name:        "inherit",
+				Aliases:     []string{"i"},
+				Usage:       "inherit shell env vars",
+				Destination: &_inherit,
 			},
 		},
-		Action:                    run,
-		HideHelpCommand:           true,
-		UseShortOptionHandling:    true,
-		Name:                      "",
-		HelpName:                  "",
-		ArgsUsage:                 "",
-		Version:                   "",
-		Description:               "",
-		DefaultCommand:            "",
-		Commands:                  nil,
-		EnableBashCompletion:      false,
-		HideHelp:                  false,
-		HideVersion:               false,
-		BashComplete:              nil,
-		Before:                    nil,
-		After:                     nil,
-		CommandNotFound:           nil,
-		OnUsageError:              nil,
-		InvalidFlagAccessHandler:  nil,
-		Compiled:                  time.Time{},
-		Authors:                   nil,
-		Copyright:                 "",
-		Reader:                    nil,
-		Writer:                    nil,
-		ErrWriter:                 nil,
-		ExitErrHandler:            nil,
-		Metadata:                  nil,
-		ExtraInfo:                 nil,
-		CustomAppHelpTemplate:     "",
-		SliceFlagSeparator:        "",
-		DisableSliceFlagSeparator: false,
-		Suggest:                   false,
-		AllowExtFlags:             false,
-		SkipFlagParsing:           false,
+		Action:                 run,
+		HideHelpCommand:        true,
+		UseShortOptionHandling: true,
 	}
 )
 
@@ -186,6 +110,10 @@ func splitEnv(env string) (string, string, error) {
 }
 
 func collectEnv() (map[string]string, error) {
+	if !_inherit && len(_envFiles.Value()) == 0 && len(_overrides.Value()) == 0 {
+		return nil, nil
+	}
+
 	envp := make(map[string]string)
 	if _inherit {
 		if _verbose {
@@ -248,15 +176,22 @@ func envToList(env map[string]string) []string {
 	return envp
 }
 
-func printEnvs() {
+func printEnvs(environ map[string]string) {
+	if environ == nil {
+		envp := os.Environ()
+		environ = make(map[string]string, len(envp))
+		for _, envVar := range envp {
+			parts := strings.SplitN(envVar, "=", 2)
+			environ[parts[0]] = parts[1]
+		}
+	}
+
 	// just print env nicely:
 	//   - sorted by name
 	//   - cutting long values to begin...end
 	//   - with padding separating names and values
 	envp := []EnvVar{}
-	for _, envVar := range os.Environ() {
-		parts := strings.SplitN(envVar, "=", 2) // TODO: change to regex
-		varValue := parts[1]
+	for k, varValue := range environ {
 		if len(varValue) > _maxFmtValueLen {
 			varValue = fmt.Sprintf(
 				"%s...%s",
@@ -265,7 +200,7 @@ func printEnvs() {
 			)
 		}
 		envp = append(envp, EnvVar{
-			Name:  parts[0],
+			Name:  k,
 			Value: varValue,
 		})
 	}
@@ -288,19 +223,19 @@ func printEnvs() {
 func run(ctx *cli.Context) error {
 	args := ctx.Args().Slice()
 
+	envp, err := collectEnv()
+	if err != nil {
+		return err
+	}
+
 	if len(args) == 0 {
-		printEnvs()
+		printEnvs(envp)
 		return nil
 	}
 
 	program, err := exec.LookPath(args[0])
 	if err != nil {
 		return fmt.Errorf("look executable path: %w", err)
-	}
-
-	envp, err := collectEnv()
-	if err != nil {
-		return err
 	}
 
 	if err := syscall.Exec(program, args, envToList(envp)); err != nil {
